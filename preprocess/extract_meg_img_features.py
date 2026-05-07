@@ -1,5 +1,5 @@
 """
-Extract chinese-clip-rn50 image features from Things-MEG dataset
+Extract clip-rn50 image features from Things-MEG dataset
 Data structure:
 - Train: training images from things-meg/Image_set/training_images
 - Test: test images from things-meg/Image_set/test_images
@@ -17,7 +17,7 @@ from cn_clip.clip import load_from_name, available_models
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Paths
-OUTPUT_DIR = r"./things-meg"
+OUTPUT_DIR = r"./EEG2image/features"
 IMAGE_ROOT = r"./things-meg/Image_set"
 TRAINING_IMAGES_DIR = os.path.join(IMAGE_ROOT, "training_images")
 TEST_IMAGES_DIR = os.path.join(IMAGE_ROOT, "test_images")

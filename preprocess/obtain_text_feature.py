@@ -208,7 +208,6 @@ def main():
 		save_text_dir = os.path.join(args.output_root, 'Description', args.llm_model, partition)
 		save_dir = os.path.join(
 			args.output_root,
-			'DNN_feature_maps',
 			'full_feature_maps',
 			args.llm_model,
 			f'pretrained-{args.pretrained}',

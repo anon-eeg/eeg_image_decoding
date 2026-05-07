@@ -12,7 +12,7 @@ def parse_args():
 	parser.add_argument('--llm_model', default='Qwen', choices=['Qwen', 'llava', 'blip'], type=str)
 	parser.add_argument('--encoder', default='cn-clip', choices=['ViT-H-14', 'cn-clip'], type=str)
 	parser.add_argument('--pretrained', default=True, type=bool)
-	parser.add_argument('--output_root', default='./EEG2image', type=str)
+	parser.add_argument('--output_root', default='./EEG2image/features', type=str)
 	return parser.parse_args()
 
 
@@ -51,8 +51,6 @@ print(f'Looking for feature files with suffix: {encoder_suffix}')
 
 save_dir = os.path.join(
 	args.output_root,
-	'DNN_feature_maps',
-	'pca_feature_maps',
 	args.llm_model,
 	f'pretrained-{args.pretrained}'
 )
@@ -63,7 +61,6 @@ partitions = ['training_images', 'test_images']
 for partition in partitions:
 	feature_base_dir = os.path.join(
 		args.output_root,
-		'DNN_feature_maps',
 		'full_feature_maps',
 		args.llm_model,
 		f'pretrained-{args.pretrained}',
