@@ -46,3 +46,13 @@ Pretrained checkpoints are available for download from:
 https://huggingface.co/datasets/anon-eeg/EEG-pretrained/tree/main
 
 place them under `./results/mae_eeg_pretrain/checkpoints/`.
+
+## Details
+
+### SubjectLayers
+**Location:** [`eeg_encoders.py`](eeg_encoders.py) (lines 375-393)
+
+The `SubjectLayers` module implements a per-subject linear transformation layer that applies subject-specific learnable parameters to EEG/MEG signals. Each subject has an independent weight matrix `(channels, channels)`.
+
+`forward(x, subjects)`: Applies subject-specific linear transformations using indexed weight selection and Einstein summation. For each sample, it retrieves the corresponding subject's transformation matrix and computes the weighted transformation independently, enabling personalized encoding while maintaining a shared model architecture.
+
