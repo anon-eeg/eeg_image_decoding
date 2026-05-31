@@ -40,7 +40,7 @@ The repository already includes cached features under [eeg_image_decoding/featur
 4. Run pretraining with `python eeg_image_decoding/Pretrain.py`.
 5. Run downstream training and evaluation with `python eeg_image_decoding/train.py`.
 or `python eeg_image_decoding/train.py --no_pretrain` to skip loading pretrained weights.
-
+6. Run cross subject training (LOSO) with `python eeg_image_decoding/train.py --insubject 0` (the default is in-subject training).
 Pretrained checkpoints are available for download from:
 
 https://huggingface.co/datasets/anon-eeg/EEG-pretrained/tree/main
