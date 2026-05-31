@@ -32,6 +32,10 @@ parser.add_argument('--early_stopping', action='store_true', default=True,
 parser.add_argument('--exp_id', type=str, default=None,
                     help='Experiment identifier for output filename (default: auto-generate from config)')
 
+# in-subject vs cross-subject mode
+parser.add_argument('--insubject', type=int, choices=[0, 1], default=1,
+                help='1: in-subject (default), 0: cross-subject (LOSO).')
+
 import os
 import random
 import itertools
@@ -85,6 +89,7 @@ class IE():
         self.b1 = 0.5
         self.b2 = 0.999
         self.nSub = nsub
+        self.insubject = args.insubject
         
         self.start_epoch = 0
         self.eeg_data_path = args.eeg_data_path
@@ -246,15 +251,35 @@ class IE():
         test_data = []
         test_label = np.arange(200)
 
-        train_data = np.load(self.eeg_data_path + '/sub-' + format(self.nSub, '02') + '/preprocessed_eeg_training.npy', allow_pickle=True)
-        train_data = train_data['preprocessed_eeg_data']
-        train_data = np.mean(train_data, axis=1)
-        train_data = np.expand_dims(train_data, axis=1)
+        if self.insubject:
+            train_data = np.load(self.eeg_data_path + '/sub-' + format(self.nSub, '02') + '/preprocessed_eeg_training.npy', allow_pickle=True)
+            train_data = train_data['preprocessed_eeg_data']
+            train_data = np.mean(train_data, axis=1)
+            train_data = np.expand_dims(train_data, axis=1)
 
-        test_data = np.load(self.eeg_data_path + '/sub-' + format(self.nSub, '02') + '/preprocessed_eeg_test.npy', allow_pickle=True)
-        test_data = test_data['preprocessed_eeg_data']
-        test_data = np.mean(test_data, axis=1)
-        test_data = np.expand_dims(test_data, axis=1)
+            test_data = np.load(self.eeg_data_path + '/sub-' + format(self.nSub, '02') + '/preprocessed_eeg_test.npy', allow_pickle=True)
+            test_data = test_data['preprocessed_eeg_data']
+            test_data = np.mean(test_data, axis=1)
+            test_data = np.expand_dims(test_data, axis=1)
+        else:
+            # Cross-subject mode: train on all subjects except self.nSub, test on self.nSub
+            all_train_data = []
+            for sub_id in range(1, 11):  # Assuming 10 subjects in total
+                # exclude self.nSub for trainings
+                if sub_id != self.nSub:
+                    sub_train = np.load(self.eeg_data_path + '/sub-' + format(sub_id, '02') + '/preprocessed_eeg_training.npy', allow_pickle=True)
+                    sub_train = sub_train['preprocessed_eeg_data']
+                    sub_train = np.mean(sub_train, axis=1)
+                    sub_train = np.expand_dims(sub_train, axis=1)
+                    all_train_data.append(sub_train)
+            
+            # Concatenate all training data from other subjects
+            train_data = np.concatenate(all_train_data, axis=0)
+
+            test_data = np.load(self.eeg_data_path + '/sub-' + format(self.nSub, '02') + '/preprocessed_eeg_test.npy', allow_pickle=True)
+            test_data = test_data['preprocessed_eeg_data']
+            test_data = np.mean(test_data, axis=1)
+            test_data = np.expand_dims(test_data, axis=1)
 
         return train_data, train_label, test_data, test_label
     
@@ -279,6 +304,23 @@ class IE():
         train_img_feature, test_img_feature = self.get_image_data()
         train_txt_feature, test_txt_feature = self.get_text_data()
 
+        # In cross-subject mode, train EEG data comes from multiple subjects
+        # We need to match the image and text features to the size of training EEG data
+        eeg_train_size = len(train_eeg)
+        img_train_size = len(train_img_feature)
+        if not self.insubject:
+            print(f"Cross-subject mode")
+            # Calculate repetition factor
+            rep_factor = int(np.ceil(eeg_train_size / img_train_size))
+            # Repeat and truncate to match EEG size (preserve tensor type for images)
+            if torch.is_tensor(train_img_feature):
+                train_img_feature = train_img_feature.repeat(rep_factor, 1)[:eeg_train_size]
+            else:
+                train_img_feature = np.tile(train_img_feature, (rep_factor, 1))[:eeg_train_size]
+            train_txt_feature = np.tile(train_txt_feature, (rep_factor, 1))[:eeg_train_size]
+            print(f"Repeated image/text features to match EEG size: {len(train_img_feature)}")
+
+        # shuffle the training data
         train_shuffle = np.random.permutation(len(train_eeg))
         train_eeg = train_eeg[train_shuffle]
         train_img_feature = train_img_feature[train_shuffle]
@@ -599,12 +641,18 @@ def main():
         torch.cuda.manual_seed(seed_n)
         torch.cuda.manual_seed_all(seed_n)
 
-        print('Subject %d' % (i+1))
+        if args.insubject:
+            print('Subject %d' % (i+1))
+        else:
+            print('Cross-subject, exclude Subject %d' % (i+1))   
         ie = IE(args, i + 1)
 
         results, topacc, results_class, topacc_class = ie.train() 
         endtime = datetime.datetime.now()
-        print('subject %d duration: '%(i+1) + str(endtime - starttime))
+        if args.insubject:
+            print('subject %d duration: '%(i+1) + str(endtime - starttime))
+        else:
+            print('cross-subject exclude subject %d duration: '%(i+1) + str(endtime - starttime))
 
         # --- top-k accuracy ---
         for k in range(10):
@@ -664,13 +712,14 @@ def main():
         # Save to separate CSV files with short exp_id
         current_date = datetime.datetime.now().strftime("%m%d")
         
-        # Use different prefix based on no_pretrain flag
+        # Use different prefix based on different settings
         prefix = "retrieval" if args.no_pretrain else "mae_retrieval"
         prefix_cls = "classification" if args.no_pretrain else "mae_classification"
+        mode_str = "insubject" if args.insubject else "cross"
         
         # Use short exp_id in filename
-        retrieval_filename = os.path.join(args.result_path, f"{prefix}_{args.encoder_type}_{args.exp_id}_{current_date}_1.csv")
-        classification_filename = os.path.join(args.result_path, f"{prefix_cls}_{args.encoder_type}_{args.exp_id}_{current_date}_1.csv")
+        retrieval_filename = os.path.join(args.result_path, f"{prefix}_{args.encoder_type}_{args.exp_id}_{current_date}_{mode_str}.csv")
+        classification_filename = os.path.join(args.result_path, f"{prefix_cls}_{args.encoder_type}_{args.exp_id}_{current_date}_{mode_str}.csv")
         
         pd_retrieval.to_csv(retrieval_filename, float_format='%.4f')
         pd_classification.to_csv(classification_filename, float_format='%.4f')
